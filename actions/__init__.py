@@ -39,7 +39,7 @@ from . import (
     infoblox_create_security_policy,
     infoblox_dhcp_lease_lookup,
     infoblox_dns_record_lookup,
-    infoblox_execute_iq_for_td_recommendation_actions,
+    infoblox_execute_iq_for_td_recommendation_action,
     infoblox_get_custom_list,
     infoblox_get_indicator_intel_lookup_result,
     infoblox_get_iq_for_td_insight_details,

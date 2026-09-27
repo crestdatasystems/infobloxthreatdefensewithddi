@@ -35,6 +35,7 @@ ERROR_AUTHORIZATION_FAILED = "Authorization failed. Please verify the API key co
 ERROR_ACCESS_FORBIDDEN = "Access forbidden. Please verify the API key configured for the asset has the required permissions."
 ERROR_ZERO_INT_PARAM = "Please provide a non-zero positive integer value in the '{key}' parameter"
 ERROR_NEG_INT_PARAM = "Please provide a positive integer value in the '{key}' parameter"
+ERROR_MAX_INT_PARAM = "Please provide an integer value less than or equal to {max_value} in the '{key}' parameter"
 ERROR_INVALID_JSON_PARAM = "Please provide a valid JSON value for the '{key}' parameter"
 ERROR_INVALID_LIST_PARAM = "Please provide a valid list value for the '{key}' parameter"
 ERROR_INVALID_BOOL_PARAM = "Please provide a valid boolean value for the '{key}' parameter"
@@ -119,8 +120,8 @@ ACTION_INDICATOR_INTEL_LOOKUP_SUCCESS_WITH_RESULTS = "Successfully retrieved {co
 ACTION_GET_INSIGHTS_INDICATORS_SUCCESS_RESPONSE = "Successfully retrieved {0} insight indicator(s)"
 ACTION_GET_INSIGHT_DETAILS_SUCCESS_RESPONSE = "Successfully retrieved details for insight ID: {insight_id}"
 ACTION_UPDATE_INSIGHT_STATUS_SUCCESS_RESPONSE = "Successfully updated status to '{status}' for insight ID: {insight_id}"
-ACTION_EXECUTE_RECOMMENDATION_ACTIONS_SUCCESS_SINGLE = "Successfully executed recommendation action for insight ID: {insight_id}"
-ACTION_EXECUTE_RECOMMENDATION_ACTIONS_FAILED_SINGLE = "Recommendation action failed for insight ID: {insight_id}. Details: {details}"
+ACTION_EXECUTE_RECOMMENDATION_ACTION_SUCCESS = "Successfully executed recommendation action for insight ID: {insight_id}"
+ACTION_EXECUTE_RECOMMENDATION_ACTION_FAILED = "Recommendation action failed for insight ID: {insight_id}. Details: {details}"
 ACTION_UNDO_RECOMMENDATION_ACTION_SUCCESS_RESPONSE = "Successfully performed undo action '{action}' for audit entry ID: {audit_entry_id}"
 ACTION_UNDO_RECOMMENDATION_ACTION_FAILED = "Failed to undo recommendation action for audit entry ID: {audit_entry_id}"
 ACTION_DHCP_LEASE_LOOKUP_SUCCESS_RESPONSE = "Successfully retrieved {count} DHCP lease data"
@@ -157,10 +158,33 @@ NAMED_LIST_TYPES = {
 
 # IQ for TD Insights specific constants
 IQ_FOR_TD_INSIGHTS_CONTAINER_SOURCE_ID_KEY = "infoblox_insight_id"
-IQ_FOR_TD_INSIGHT_STATUS_VALUES = ["Needs Review", "In Progress", "Resolved", "Reopened", "Accepted Risk", "False Positive"]
+IQ_FOR_TD_INSIGHT_STATUS_VALUES = [
+    "Needs Review",
+    "In Progress",
+    "Resolved",
+    "Accepted Risk",
+    "False Positive",
+]
 
 # Phantom severity mapping for IQ for TD insights
-PHANTOM_SEVERITY_MAP = {"LOW": "low", "MEDIUM": "medium", "HIGH": "high", "CRITICAL": "high"}
+PHANTOM_SEVERITY_MAP = {
+    "LOW": "low",
+    "MEDIUM": "medium",
+    "HIGH": "high",
+    "CRITICAL": "high",
+}
+
+# Infoblox insight workflow status -> SOAR container status. Infoblox is the system of record for
+# the insight lifecycle, so an insight that is already closed upstream must not be ingested as a
+# new/open SOAR container.
+PHANTOM_CONTAINER_STATUS_MAP = {
+    "NEEDS REVIEW": "new",
+    "IN PROGRESS": "open",
+    "RESOLVED": "closed",
+    "ACCEPTED RISK": "closed",
+    "FALSE POSITIVE": "closed",
+}
+DEFAULT_CONTAINER_STATUS = "new"
 
 # Default limits
 DEFAULT_LIMIT = 100
@@ -169,9 +193,16 @@ MAX_LIMIT = 1000
 # IQ for TD Insights v2 sub-resource limits (per Infoblox v2 Insights API defaults)
 IQ_FOR_TD_INSIGHTS_DEFAULT_LIMIT = 1000
 IQ_FOR_TD_INSIGHTS_EVENTS_DEFAULT_LIMIT = 5000
+IQ_FOR_TD_INSIGHTS_EVENTS_MAX_LIMIT = 5000
 
 # Address states for validation
 VALID_ADDRESS_STATES = ["Free", "Used", "Any"]
 
 # Severity mapping for DNS Security Events
-SEVERITY_MAPPING = {"LOW": "low", "INFO": "low", "MEDIUM": "medium", "HIGH": "high", "CRITICAL": "high"}
+SEVERITY_MAPPING = {
+    "LOW": "low",
+    "INFO": "low",
+    "MEDIUM": "medium",
+    "HIGH": "high",
+    "CRITICAL": "high",
+}

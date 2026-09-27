@@ -44,7 +44,7 @@ def test_all_reported_path_handlers_apply_identifier_validation():
         "infoblox_get_iq_for_td_insights_indicators.py": "insight_id",
         "infoblox_get_iq_for_td_insights_events.py": "insight_id",
         "infoblox_get_iq_for_td_insight_details.py": "insight_id",
-        "infoblox_execute_iq_for_td_recommendation_actions.py": "insight_id",
+        "infoblox_execute_iq_for_td_recommendation_action.py": "insight_id",
         "infoblox_undo_iq_for_td_recommendation_action.py": "audit_entry_id",
         "infoblox_get_indicator_intel_lookup_result.py": "job_id",
     }

@@ -115,7 +115,6 @@
                 "Needs Review",
                 "In Progress",
                 "Resolved",
-                "Reopened",
                 "Accepted Risk",
                 "False Positive"
             ]
@@ -5928,7 +5927,6 @@
                         "Needs Review",
                         "In Progress",
                         "Resolved",
-                        "Reopened",
                         "Accepted Risk",
                         "False Positive"
                     ]
@@ -5973,8 +5971,28 @@
                     ]
                 },
                 {
-                    "data_path": "action_result.data",
-                    "data_type": "string"
+                    "data_path": "action_result.data.*.insight_id",
+                    "data_type": "string",
+                    "contains": [
+                        "infoblox insight id"
+                    ],
+                    "example_values": [
+                        "ea970c56-9d69-4844-8dc2-77d9be724c43"
+                    ]
+                },
+                {
+                    "data_path": "action_result.data.*.status",
+                    "data_type": "string",
+                    "example_values": [
+                        "Resolved"
+                    ]
+                },
+                {
+                    "data_path": "action_result.data.*.response",
+                    "data_type": "string",
+                    "example_values": [
+                        "{\"success\": \"Status updated\"}"
+                    ]
                 },
                 {
                     "data_path": "action_result.summary.insight_id",
@@ -6019,8 +6037,8 @@
             "versions": "EQ(*)"
         },
         {
-            "action": "execute iq for td recommendation actions",
-            "identifier": "execute_iq_for_td_recommendation_actions",
+            "action": "execute iq for td recommendation action",
+            "identifier": "execute_iq_for_td_recommendation_action",
             "description": "Execute a single recommendation action on an IQ for TD Insight, referencing the recommendation by the ID returned in the 'get iq for td insight details' action",
             "type": "contain",
             "read_only": false,
@@ -6185,20 +6203,20 @@
                 "width": 12,
                 "type": "table",
                 "height": 5,
-                "title": "Execute IQ for TD Recommendation Actions"
+                "title": "Execute IQ for TD Recommendation Action"
             },
             "versions": "EQ(*)"
         },
         {
             "action": "undo iq for td recommendation action",
             "identifier": "undo_iq_for_td_recommendation_action",
-            "description": "Reverse a previously executed recommendation action using the audit entry ID returned by the 'execute iq for td recommendation actions' action",
+            "description": "Reverse a previously executed recommendation action using the audit entry ID returned by the 'execute iq for td recommendation action' action",
             "type": "correct",
             "read_only": false,
             "parameters": {
                 "audit_entry_id": {
                     "data_type": "string",
-                    "description": "Single audit log entry ID to undo (from the 'execute iq for td recommendation actions' output); comma-separated multiple values are not supported",
+                    "description": "Single audit log entry ID to undo (from the 'execute iq for td recommendation action' output); comma-separated multiple values are not supported",
                     "order": 0,
                     "primary": true,
                     "required": true,

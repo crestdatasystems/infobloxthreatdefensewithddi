@@ -172,10 +172,13 @@ class InfobloxUtils:
 
         # Try to extract error details from response
         if isinstance(resp_json, dict):
-            # Handle nested error structure: {"error": [{"message": "..."}]}
+            # The error array shape is not guaranteed: some endpoints return an empty list or a
+            # list of plain strings, so never index or attribute-access it unconditionally.
             error_obj = resp_json.get("error")
-            if isinstance(error_obj, list) and error_obj[0].get("message"):
-                error_message += f" Message: {error_obj[0].get('message')}"
+            first_error = error_obj[0] if isinstance(error_obj, list) and error_obj else None
+            # Handle nested error structure: {"error": [{"message": "..."}]}
+            if isinstance(first_error, dict) and first_error.get("message"):
+                error_message += f" Message: {first_error.get('message')}"
             # Handle direct error field
             elif error_obj:
                 error_message += f" Error: {error_obj}"
@@ -287,18 +290,26 @@ class InfobloxUtils:
             if cached_api_key and cached_api_key == api_key:
                 return cached_customer_id
 
+        # The header is best-effort telemetry: this lookup must never surface an exception into the
+        # caller's action, so both transport failures and unexpected payload shapes degrade to None.
         lookup_result = ActionResult(dict())
-        ret_val, response = self.make_rest_call(
-            consts.ACCOUNT_ENDPOINT,
-            lookup_result,
-            method="get",
-            include_customer_header=False,
-        )
+        try:
+            ret_val, response = self.make_rest_call(
+                consts.ACCOUNT_ENDPOINT,
+                lookup_result,
+                method="get",
+                include_customer_header=False,
+            )
+        except Exception as e:
+            self._connector.debug_print(f"Infoblox customer ID lookup raised an error. Error: {e}")
+            return None
+
         if phantom.is_fail(ret_val) or not isinstance(response, dict):
             self._connector.debug_print("Unable to retrieve Infoblox customer ID for request headers.")
             return None
 
-        customer_id = response.get("results", {}).get("customer_id")
+        results = response.get("results")
+        customer_id = results.get("customer_id") if isinstance(results, dict) else None
         if customer_id:
             state[consts.STATE_KEY_CUSTOMER_ID] = customer_id
             try:
@@ -622,7 +633,7 @@ class Validator:
         """
         return phantom.is_hash(hash_value)
 
-    def validate_integer(self, action_result, parameter, key, allow_zero=False, allow_negative=False):
+    def validate_integer(self, action_result, parameter, key, allow_zero=False, allow_negative=False, max_value=None):
         """
         Validate if a given parameter is an integer.
 
@@ -632,6 +643,7 @@ class Validator:
             key (str): The key of the parameter to validate.
             allow_zero (bool): Whether to allow zero as a valid integer (default is False).
             allow_negative (bool): Whether to allow negative integers as valid (default is False).
+            max_value (int): Inclusive upper bound to enforce, or None for no upper bound.
 
         Returns:
             Tuple[int, int]: A tuple containing the status of the action and the validated integer.
@@ -666,6 +678,12 @@ class Validator:
             if not allow_negative and parameter < 0:
                 return (
                     action_result.set_status(phantom.APP_ERROR, consts.ERROR_NEG_INT_PARAM.format(key=key)),
+                    None,
+                )
+
+            if max_value is not None and parameter > max_value:
+                return (
+                    action_result.set_status(phantom.APP_ERROR, consts.ERROR_MAX_INT_PARAM.format(key=key, max_value=max_value)),
                     None,
                 )
 

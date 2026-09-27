@@ -1,4 +1,4 @@
-# File: infoblox_execute_iq_for_td_recommendation_actions.py
+# File: infoblox_execute_iq_for_td_recommendation_action.py
 #
 # Copyright 2026 Infoblox Inc.
 #
@@ -21,8 +21,8 @@ import infoblox_consts as consts
 from actions import BaseAction
 
 
-class ExecuteIqForTdRecommendationActions(BaseAction):
-    """Class to handle execute iq for td recommendation actions action.
+class ExecuteIqForTdRecommendationAction(BaseAction):
+    """Class to handle execute iq for td recommendation action action.
 
     This action executes a single recommendation action on an IQ for TD Insight. The
     recommendation is referenced by the recommendation ID returned in the
@@ -59,7 +59,7 @@ class ExecuteIqForTdRecommendationActions(BaseAction):
 
     def __log_action_start(self):
         """Log the start of the action execution."""
-        self._connector.save_progress(consts.EXECUTION_START_MSG.format("Execute IQ for TD Recommendation Actions"))
+        self._connector.save_progress(consts.EXECUTION_START_MSG.format("Execute IQ for TD Recommendation Action"))
 
     def __build_payload(self):
         """
@@ -78,7 +78,7 @@ class ExecuteIqForTdRecommendationActions(BaseAction):
 
     def __make_api_call(self, payload):
         """
-        Make the API call to execute the recommendation actions.
+        Make the API call to execute the recommendation action.
 
         Args:
             payload (dict): Request payload
@@ -90,7 +90,7 @@ class ExecuteIqForTdRecommendationActions(BaseAction):
 
         endpoint = consts.IQ_FOR_TD_INSIGHT_EXECUTE_ACTIONS_ENDPOINT.format(quote(str(self._param.get("insight_id")), safe=""))
 
-        self._connector.debug_print(f"Executing recommendation actions with payload: {payload}")
+        self._connector.debug_print(f"Executing recommendation action with payload: {payload}")
 
         return self._connector.util.make_rest_call(
             endpoint=endpoint,
@@ -139,15 +139,15 @@ class ExecuteIqForTdRecommendationActions(BaseAction):
                 details = f"{result.get('reason', 'unknown')}: {result.get('message', '')}".strip(": ")
             else:
                 details = "No result returned for the requested recommendation ID"
-            message = consts.ACTION_EXECUTE_RECOMMENDATION_ACTIONS_FAILED_SINGLE.format(insight_id=insight_id, details=details)
+            message = consts.ACTION_EXECUTE_RECOMMENDATION_ACTION_FAILED.format(insight_id=insight_id, details=details)
             return self._action_result.set_status(phantom.APP_ERROR, message)
 
-        message = consts.ACTION_EXECUTE_RECOMMENDATION_ACTIONS_SUCCESS_SINGLE.format(insight_id=insight_id)
+        message = consts.ACTION_EXECUTE_RECOMMENDATION_ACTION_SUCCESS.format(insight_id=insight_id)
         return self._action_result.set_status(phantom.APP_SUCCESS, message)
 
     def execute(self):
         """
-        Execute the execute iq for td recommendation actions action following the modular approach.
+        Execute the execute iq for td recommendation action action following the modular approach.
 
         Step 1: Log action start
         Step 2: Validate parameters

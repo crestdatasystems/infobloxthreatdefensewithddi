@@ -13,7 +13,7 @@
 # either express or implied. See the License for the specific language governing permissions
 # and limitations under the License.
 
-from datetime import datetime
+import time
 
 import phantom.app as phantom
 
@@ -52,6 +52,18 @@ class OnPoll(BaseAction):
         self._is_poll_now = self._connector.is_poll_now()
         self._state = self._connector._state
 
+        # Honor SOAR's container_count/artifact_count only for a manual "Poll Now" run. The IQ
+        # insights API returns every matching insight in a single unpaginated response and this
+        # poll keeps no checkpoint, so capping a scheduled run would re-process the same first N
+        # insights on every run and permanently skip the rest. Scheduled runs are bounded by the
+        # asset's IQ for TD filters instead.
+        if self._is_poll_now:
+            self._container_count = self._normalize_poll_limit(param.get(phantom.APP_JSON_CONTAINER_COUNT))
+            self._artifact_count = self._normalize_poll_limit(param.get(phantom.APP_JSON_ARTIFACT_COUNT))
+        else:
+            self._container_count = None
+            self._artifact_count = None
+
         # Get the ingestion type from the configuration
         ingestion_type = config.get("ingestion_type", "DNS Security Events")
 
@@ -86,6 +98,24 @@ class OnPoll(BaseAction):
             return self._action_result.set_status(phantom.APP_ERROR, f"Invalid ingestion type: {ingestion_type}")
 
         return self._action_result.set_status(phantom.APP_SUCCESS)
+
+    @staticmethod
+    def _normalize_poll_limit(value):
+        """Coerce a SOAR poll limit to a non-negative int, or None when it is absent/unusable.
+
+        Args:
+            value: Raw ``container_count``/``artifact_count`` value from the poll parameters
+
+        Returns:
+            int or None: The limit to enforce, or None for "no limit"
+        """
+        if value is None:
+            return None
+        try:
+            limit = int(value)
+        except (ValueError, TypeError):
+            return None
+        return limit if limit >= 0 else None
 
     def _process_parameters(self, config):
         """Process and validate parameters from the asset configuration.
@@ -128,7 +158,11 @@ class OnPoll(BaseAction):
         for param_name in multi_value_params:
             param_value = getattr(self, param_name)
             if param_value and isinstance(param_value, str):
-                setattr(self, param_name, [x.strip() for x in param_value.split(",") if x.strip()])
+                setattr(
+                    self,
+                    param_name,
+                    [x.strip() for x in param_value.split(",") if x.strip()],
+                )
 
         # Convert limit to integer
         try:
@@ -160,7 +194,10 @@ class OnPoll(BaseAction):
         # Make the API request
         endpoint = consts.DNS_SECURITY_EVENTS_ENDPOINT
         ret_val, response = self._connector.util.make_rest_call(
-            endpoint=endpoint, action_result=self._action_result, method="get", params=params
+            endpoint=endpoint,
+            action_result=self._action_result,
+            method="get",
+            params=params,
         )
 
         if phantom.is_fail(ret_val):
@@ -190,7 +227,11 @@ class OnPoll(BaseAction):
         Returns:
             tuple: (t0, t1) timestamps in seconds since epoch
         """
-        current_time = int(datetime.utcnow().timestamp())
+        # time.time() is an absolute UTC epoch. datetime.utcnow().timestamp() must not be used
+        # here: utcnow() is naive, so .timestamp() re-interprets it as local time and shifts the
+        # whole polling window by the host's UTC offset, while the checkpoint stored in state is a
+        # true UTC epoch produced by parse_event_timestamp().
+        current_time = int(time.time())
 
         if self._is_poll_now:
             # For manual polling, use the configured lookback period
@@ -538,7 +579,8 @@ class OnPoll(BaseAction):
 
         if self._iq_for_td_date_created and not self._connector.validator.validate_rfc3339_datetime(self._iq_for_td_date_created):
             return self._action_result.set_status(
-                phantom.APP_ERROR, consts.ERROR_INVALID_RFC3339_DATETIME_FORMAT.format(key="iq_for_td_date_created")
+                phantom.APP_ERROR,
+                consts.ERROR_INVALID_RFC3339_DATETIME_FORMAT.format(key="iq_for_td_date_created"),
             )
 
         return phantom.APP_SUCCESS
@@ -561,7 +603,10 @@ class OnPoll(BaseAction):
         # Make the API request
         endpoint = consts.IQ_FOR_TD_INSIGHTS_ENDPOINT
         ret_val, response = self._connector.util.make_rest_call(
-            endpoint=endpoint, action_result=self._action_result, method="get", params=params
+            endpoint=endpoint,
+            action_result=self._action_result,
+            method="get",
+            params=params,
         )
 
         if phantom.is_fail(ret_val):
@@ -579,6 +624,12 @@ class OnPoll(BaseAction):
             return phantom.APP_SUCCESS, response
 
         self._connector.save_progress(consts.ACTION_IQ_FOR_TD_INSIGHTS_SUCCESS.format(count=len(insights)))
+
+        if self._container_count is not None and len(insights) > self._container_count:
+            self._connector.save_progress(
+                f"Limiting ingestion to the requested maximum of {self._container_count} container(s) out of {len(insights)} insight(s) returned"
+            )
+            insights = insights[: self._container_count]
 
         # Process the response and create containers/artifacts
         ret_val, containers_created = self._process_iq_for_td_insights(insights)
@@ -655,18 +706,19 @@ class OnPoll(BaseAction):
                     self._connector.debug_print("Skipping insight without insight_id")
                     continue
 
-                # Create a container for this insight
-                container_result = self._create_container_for_insight(insight)
-                self._connector.debug_print(f"Container result for insight {insight_id}: {container_result}")
-                if container_result and len(container_result) > 2:
-                    container_id = container_result[2]
+                # Create (or reuse the duplicate of) the container for this insight
+                container_id, is_duplicate = self._create_container_for_insight(insight)
+                if container_id is None:
+                    continue
 
+                if not is_duplicate:
                     containers_created += 1
                     self._connector.debug_print(consts.CONTAINER_CREATED_MSG.format(insight_id=insight_id))
 
-                    # Create an artifact for this insight
+                # Create an artifact for this insight, unless the poll asked for no artifacts
+                if self._artifact_count is None or self._artifact_count > 0:
                     artifact_id = self._create_artifact_for_insight(insight, container_id)
-                    if artifact_id:
+                    if artifact_id is not None:
                         self._connector.debug_print(consts.ARTIFACT_CREATED_MSG.format(insight_id=insight_id))
 
                 if (i + 1) % 10 == 0:
@@ -686,7 +738,8 @@ class OnPoll(BaseAction):
             insight (dict): IQ for TD Insight data
 
         Returns:
-            int: Container ID if successful, None otherwise
+            tuple: (container ID, whether SOAR matched an existing duplicate container), or
+                (None, False) if the container could not be saved
         """
         try:
             # Generate container name as specified: name + '-' + insight_id
@@ -699,6 +752,7 @@ class OnPoll(BaseAction):
             )
             # Map severity to container severity
             container_severity = self._map_severity(insight.get("severity", ""))
+            container_status = self._map_status(insight.get("status", ""))
 
             # Generate source data identifier using insight_id for deduplication
             source_data_id = f"{consts.IQ_FOR_TD_INSIGHTS_CONTAINER_SOURCE_ID_KEY}_{insight_id}"
@@ -709,16 +763,29 @@ class OnPoll(BaseAction):
                 "description": f"IQ for TD Insight: {name} - {insight_id}",
                 "source_data_identifier": source_data_id,
                 "severity": container_severity,
+                "status": container_status,
                 "label": self._connector.get_config().get("ingest", {}).get("container_label"),
                 "data": insight,
-                "tags": ["infoblox", "iq_for_td_insights", name.lower(), insight_id.lower()],
+                "tags": ["infoblox", "iq_for_td_insights"],
             }
 
-            return self._connector.save_container(container_json)
+            save_result = self._connector.save_container(container_json)
 
         except Exception as e:
             self._connector.debug_print(f"Error creating container: {e!s}")
-            return None
+            return None, False
+
+        if save_result and len(save_result) == 3:
+            ret_val, message, container_id = save_result
+            if phantom.is_success(ret_val) and container_id is not None:
+                is_duplicate = message == "Duplicate container found"
+                self._connector.debug_print(f"{'Using existing' if is_duplicate else 'Successfully created'} container with ID: {container_id}")
+                return container_id, is_duplicate
+            self._connector.debug_print(f"Failed to create container: {message}")
+        else:
+            self._connector.debug_print("Unexpected return value from save_container")
+
+        return None, False
 
     def _map_severity(self, severity):
         """Map IQ for TD Insight severity to Phantom container severity.
@@ -730,6 +797,31 @@ class OnPoll(BaseAction):
             str: Phantom severity level
         """
         return consts.PHANTOM_SEVERITY_MAP.get(severity.upper(), "high")
+
+    def _map_status(self, status):
+        """Map IQ for TD Insight workflow status to a SOAR container status.
+
+        Args:
+            status (str): Status text from insight (e.g. Needs Review, In Progress, Resolved)
+
+        Returns:
+            str: SOAR container status (new, open, or closed)
+        """
+        return consts.PHANTOM_CONTAINER_STATUS_MAP.get(str(status).strip().upper(), consts.DEFAULT_CONTAINER_STATUS)
+
+    @staticmethod
+    def _format_cef_list(value):
+        """Render a possibly list-valued insight field as a CEF-safe scalar.
+
+        Args:
+            value: Raw insight field value, which the API may return as a list
+
+        Returns:
+            str: Comma-joined string for list input, the original scalar otherwise
+        """
+        if isinstance(value, (list, tuple, set)):
+            return ", ".join(str(item) for item in value)
+        return "" if value is None else value
 
     def _create_artifact_for_insight(self, insight, container_id):
         """Create an artifact for an IQ for TD Insight.
@@ -756,7 +848,9 @@ class OnPoll(BaseAction):
                 "Description": insight.get("description", ""),
                 "Status": insight.get("status", ""),
                 "Severity": insight.get("severity", ""),
-                "Threat Properties": insight.get("threat_properties", []),
+                # CEF values are consumed as scalars by playbooks and the artifact table, so join
+                # the list form the API returns. The raw list stays in the artifact's `data`.
+                "Threat Properties": self._format_cef_list(insight.get("threat_properties")),
                 # Time Information
                 "Date Created": insight.get("date_created", ""),
                 "Evaluation Start Date": insight.get("evaluation_start_date", ""),
@@ -793,8 +887,18 @@ class OnPoll(BaseAction):
                 "tags": ["infoblox", "iq_for_td_insights"],
             }
 
-            return self._connector.save_artifact(artifact_json)
+            save_result = self._connector.save_artifact(artifact_json)
 
         except Exception as e:
             self._connector.debug_print(f"Error creating artifact: {e!s}")
             return None
+
+        if save_result and len(save_result) == 3:
+            ret_val, message, artifact_id = save_result
+            if phantom.is_success(ret_val) and artifact_id is not None:
+                return artifact_id
+            self._connector.debug_print(f"Failed to save artifact: {message}")
+        else:
+            self._connector.debug_print("Unexpected return value from save_artifact")
+
+        return None

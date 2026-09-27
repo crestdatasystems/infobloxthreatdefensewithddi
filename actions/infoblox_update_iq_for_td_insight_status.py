@@ -13,6 +13,8 @@
 # either express or implied. See the License for the specific language governing permissions
 # and limitations under the License.
 
+import json
+
 import phantom.app as phantom
 
 import infoblox_consts as consts
@@ -96,10 +98,19 @@ class UpdateIqForTdInsightStatus(BaseAction):
         Returns:
             int: phantom.APP_SUCCESS on successful processing
         """
-        self._action_result.add_data(response if isinstance(response, dict) else {})
-
         insight_id = self._param.get("insight_id")
         status = self._param.get("status")
+
+        # The status endpoint's response body is not part of its documented contract, so publish a
+        # stable, typed datapath rather than whatever ad-hoc object the API returns. The raw body is
+        # preserved verbatim as a serialized string for troubleshooting.
+        self._action_result.add_data(
+            {
+                "insight_id": insight_id,
+                "status": status,
+                "response": json.dumps(response) if response else "",
+            }
+        )
 
         summary = {"insight_id": insight_id, "status": status}
         self._action_result.update_summary(summary)

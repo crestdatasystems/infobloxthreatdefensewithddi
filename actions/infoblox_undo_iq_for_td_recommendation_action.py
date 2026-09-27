@@ -26,7 +26,7 @@ class UndoIqForTdRecommendationAction(BaseAction):
 
     This action reverses a previously executed recommendation action (e.g., allow a
     blocked indicator, remove the risky flag from an asset, revert a policy change).
-    The audit entry ID is obtained from the 'execute iq for td recommendation actions' output;
+    The audit entry ID is obtained from the 'execute iq for td recommendation action' output;
     the server resolves the recommendation type, target, and action from that ID.
     """
 
@@ -36,8 +36,8 @@ class UndoIqForTdRecommendationAction(BaseAction):
         Note: Required parameter validation is handled by SOAR's built-in JSON schema validation.
 
         This action reverses a single recommendation action, so 'audit_entry_id' must be a
-        single ID; comma-separated multiple IDs are not supported (unlike the 'execute iq for
-        td recommendation actions' action, which does accept a comma-separated list).
+        single ID; comma-separated multiple IDs are not supported (matching the 'execute iq for
+        td recommendation action' action, which also rejects comma-separated lists).
 
         Returns:
             int: phantom.APP_SUCCESS if validation passes, phantom.APP_ERROR otherwise

@@ -60,12 +60,16 @@ class GetIqForTdInsightsEvents(BaseAction):
 
         # Validate limit parameter if provided
         limit = self._param.get("limit", consts.IQ_FOR_TD_INSIGHTS_EVENTS_DEFAULT_LIMIT)
-        if limit is not None:
-            ret_val, limit = self._connector.validator.validate_integer(
-                self._action_result, limit, "limit", allow_zero=False, allow_negative=False
-            )
-            if phantom.is_fail(ret_val):
-                return ret_val
+        ret_val, self._limit = self._connector.validator.validate_integer(
+            self._action_result,
+            limit,
+            "limit",
+            allow_zero=False,
+            allow_negative=False,
+            max_value=consts.IQ_FOR_TD_INSIGHTS_EVENTS_MAX_LIMIT,
+        )
+        if phantom.is_fail(ret_val):
+            return ret_val
 
         # Validate device_ip parameter if provided - comma-separated list of IP addresses
         device_ip = self._param.get("device_ip")
@@ -118,9 +122,7 @@ class GetIqForTdInsightsEvents(BaseAction):
             params["detected_from"] = self._param.get("detected_from")
         if self._param.get("detected_to"):
             params["detected_to"] = self._param.get("detected_to")
-        limit = self._param.get("limit", consts.IQ_FOR_TD_INSIGHTS_EVENTS_DEFAULT_LIMIT)
-        if limit is not None:
-            params["limit"] = limit
+        params["limit"] = self._limit
 
         self._connector.debug_print(f"Making API call to {endpoint}")
         self._connector.debug_print(f"Query parameters: {params}")
@@ -158,7 +160,7 @@ class GetIqForTdInsightsEvents(BaseAction):
             summary = {
                 "total_events": 0,
                 "insight_id": self._param.get("insight_id", "Unknown"),
-                "limit_applied": self._param.get("limit", consts.IQ_FOR_TD_INSIGHTS_EVENTS_DEFAULT_LIMIT),
+                "limit_applied": self._limit,
             }
             self._action_result.update_summary(summary)
 
@@ -177,7 +179,7 @@ class GetIqForTdInsightsEvents(BaseAction):
         summary = {
             "total_events": total_events,
             "insight_id": self._param.get("insight_id", "Unknown"),
-            "limit_applied": self._param.get("limit", consts.IQ_FOR_TD_INSIGHTS_EVENTS_DEFAULT_LIMIT),
+            "limit_applied": self._limit,
         }
 
         self._action_result.update_summary(summary)

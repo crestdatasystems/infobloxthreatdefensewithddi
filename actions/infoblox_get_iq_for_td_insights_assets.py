@@ -123,7 +123,9 @@ class GetIqForTdInsightsAssets(BaseAction):
         Returns:
             int: phantom.APP_SUCCESS on successful processing
         """
-        self._connector.debug_print(f"Processing response: {response}")
+        # Asset records carry device names, MAC/IP addresses and user names, so never log the raw
+        # response body; the asset count below is enough to diagnose the datapath.
+        self._connector.debug_print("Processing insights assets response")
 
         # Extract assets from the response
         assets = []
